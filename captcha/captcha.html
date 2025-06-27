@@ -26,13 +26,7 @@
 
 <body>
   <div id="captcha-container">
-    <!-- Add your CAPTCHA here: -->
-    Hello world!
-
-    <!-- We've added a sample button. Feel free to remove it: -->
-    <button id="solve">
-      Solve!
-    </button>
+    <canvas id="board"> </canvas>
   </div>
 
   <script type="text/javascript">
@@ -43,6 +37,306 @@
       }
 
       // Your CAPTCHA code goes here, we've added a simple example below:
+      // Define variables for game
+      let board;
+      let board_width = 386;
+      let board_height = 296;
+      let context;
+
+      const gravity = 0.25;
+
+      const veloxity_x = -2; // pixels per second L to R
+
+      const boost_on_click = -6; // How much upwards momentum to give the crow on click/tap
+
+      // Function so I can do other stuff
+      function pickrandom(type, values) {
+        let acceptable_types = ["array", "number_between"];
+
+        // Handle random item from array
+        if (type === "array") {
+          let random_index = Math.floor(Math.random() * values.length);
+          let random_pick = values[random_index];
+
+          return random_pick;
+        }
+        // Handle random number between values
+        else if (type === "number_between") {
+          let starting_number = values[0];
+          let ending_number = values[1];
+          let number_difference = ending_number - starting_number + 1;
+          // Picks random number from 0 to difference between start and end,
+          // adds starting number to shift up to correct range.
+          let random_pick = Math.floor(Math.random() * number_difference) + starting_number;
+
+          return random_pick;
+        }
+        else {
+          console.log("Uncaught exception in type function, received type: " + type + ", allowed types: " + str(acceptable_types));
+          return "Uncaught exception";
+        }
+      }
+
+      // threshold_score is the value someone needs to reach before winning/passing the verification.
+      let threshold_score = 10;
+      let current_score = 0;
+
+
+      let game_won = false;
+      let game_over = false;
+
+      let lore_reason_start = ["Please perform our custom made dexterity task of easy difficulty"
+        , "Please complete this simple task"
+        , "We collaborated with a group of young people to design the simplest possible way"]
+      let lore_reason_conjunct = ["to"
+        , "so we can"
+        , "in order to"
+        , "so that we might"]
+      let lore_reason_end = ["prove you are a human."
+        , "generate entropy so we can securely retrieve your bitcoin."
+        , "review your behavior for bot like characteristics."
+        , "mitigate a recent increase in AI activity on our networks."]
+
+      // Generate reason for doing this
+      function generate_lore_reason(lore_reason_start, lore_reason_conjunct, lore_reason_end) {
+        let start = pickrandom("array", lore_reason_start);
+        let middle = pickrandom("array", lore_reason_conjunct);
+        let end = pickrandom("array", lore_reason_end);
+
+        return start + " " + middle + " " + end;
+      }
+
+      let current_lore_reason = generate_lore_reason(lore_reason_start, lore_reason_conjunct, lore_reason_end);
+      console.log(current_lore_reason)
+
+      // Bird
+      // Ratio: 17 / 12 pixels; *1.5
+      let bird_scale_factor = 1.5
+      let bird_width = 17 * bird_scale_factor;
+      let bird_height = 12 * bird_scale_factor;
+      // Starting bird position
+      let bird_x = board_width / 8;
+      let bird_y = board_height / 2;
+      let bird_image;
+      let bird_velocity = 0;
+      let bird_angle = 0;
+
+      let bird = {
+        x: bird_x,
+        y: bird_y,
+        width: bird_width,
+        height: bird_height,
+        velocity: bird_velocity,
+        angle: bird_angle
+      }
+
+      // Generate and track pipes
+      let pipe_array = [];
+      // Pipe ratio: 1:8
+      let pipe_width = 32;
+      let pipe_height = 256;
+      let pipe_x = board_width;
+      let pipe_y = 0;
+
+      let top_pipe_image;
+      let bottom_pipe_image;
+
+      // Game player
+      window.onload = function () {
+        board = document.getElementById("board");
+        board.height = board_height;
+        board.width = board_width;
+        context = board.getContext("2d");
+
+        // Manually paint the background into the canvas
+        context.fillStyle = "skyblue";
+        context.fillRect(0, 0, board.width, board.height);
+
+        // Draw bird
+        bird_image = new Image();
+        bird_image.src = "./Assets/flap_wing_down.png"
+        bird_image.onload = function () {
+          context.drawImage(bird_image, bird.x, bird.y, bird.width, bird.height);
+        }
+
+        top_pipe_image = new Image();
+        top_pipe_image.src = "./Assets/pipe_upper.png"
+
+        bottom_pipe_image = new Image();
+        bottom_pipe_image.src = "./Assets/pipe_lower.png"
+
+
+        requestAnimationFrame(update);
+        setInterval(place_pipes, 1200); // Miliseconds
+
+        // Allow keyboard buttons: space, up button, w
+        document.addEventListener("keydown", move_bird);
+
+        // Allow left mouse click
+        document.addEventListener("click", move_bird);
+      }
+
+
+      // Updating frames. game loop :)
+      function update() {
+        requestAnimationFrame(update);
+        if (game_over) {
+          return;
+        }
+        if (game_won) {
+          captchaSuccess();
+        }
+        context.clearRect(0, 0, board.width, board.height);
+
+        // Manually paint the background into the canvas
+        context.fillStyle = "skyblue";
+        context.fillRect(0, 0, board.width, board.height);
+
+        // Redraw bird
+        bird.velocity += gravity;
+        bird.y += bird.velocity;
+        // If bird velocity is positive, then make bird image flap down, otherwise flap up
+        if (bird.velocity > 1) {
+          bird_image.src = "./Assets/flap_wing_down.png"
+        } else if (bird.velocity < - 1) {
+          bird_image.src = "./Assets/flap_wing_up.png"
+        } else {
+          bird_image.src = "./Assets/flap_wing_middle.png"
+        }
+
+
+        // Bird rotate maths. Rotate = 0 when velocity 0, pointing upwards when velocity -6, ergo
+        // half a radian * x = -6; x = radian / 2 * velocity
+        bird.angle = bird.velocity*0.1;
+
+
+        // Handle bird rotate, or crowtate, if you will
+        context.save()
+        // Move origin to bird centre
+        context.translate(bird.x + bird.width / 2, bird.y + bird.height / 2);
+        context.rotate(bird.angle);
+        context.translate(-bird.width / 2, -bird.height / 2);
+        context.drawImage(bird_image, 0, 0, bird.width, bird.height);
+        context.restore();
+
+        // Check if out of bounds
+        if (bird.y > board.height - bird.height || bird.y < 0) {
+          game_over = true;
+        }
+
+
+        // Loop over pipe array and draw them
+        for (let i = 0; i < pipe_array.length; i++) {
+          let pipe = pipe_array[i];
+          // Update pipe x position
+          pipe.x += veloxity_x;
+          context.drawImage(pipe.img, pipe.x, pipe.y, pipe.width, pipe.height);
+
+          if (!pipe.pipe_passed && bird.x > pipe.x ) {
+            // Pipes come in pairs, each gives half the point
+            current_score += 0.5;
+            pipe.pipe_passed = true;
+            if (current_score >= threshold_score) {
+              game_won = true;
+            }
+          }
+
+          if (detect_collision(bird, pipe)) {
+            game_over = true;
+          }
+
+        }
+
+        // Clear old pipes
+        while (pipe_array.length > 0 && pipe_array[0].x < -pipe_width) {
+          // Remove first pipe if it's gone
+          pipe_array.shift();
+          console.log("Pipe cleared!")
+        }
+
+        // Score
+        context.fillStyle = "white";
+        context.fillRect(0, 0, board.width, 30);
+        context.font = "15px sans-serif";
+        context.fillStyle = "black";
+        context.fillText("Verification number: " + current_score , 5, 20);
+        context.fillText("Required to pass: " + threshold_score , 200, 20)
+
+        if (game_over) {
+          context.fillStyle = "white";
+          context.fillRect(30, 75, board.width - 60, board.height - 135);
+          context.font = "25px arial";
+          context.fillStyle = "black";
+          context.fillText("Task failed! Please", 90, 140)
+          context.fillText("try again to verify!", 90, 190)
+
+        }
+
+      }
+
+      // Places pipes
+      function place_pipes() {
+        if (game_over) {
+          return;
+        }
+        // Random offset
+        let random_pipe_y = pipe_y - (pipe_height/4) - Math.random()*(pipe_height/2);
+        let pipe_gap = 2*(board.height)/7;
+
+        let top_pipe = {
+          img: top_pipe_image,
+          x: pipe_x,
+          y: random_pipe_y,
+          width: pipe_width,
+          height: pipe_height,
+
+          pipe_passed: false
+
+        }
+
+        pipe_array.push(top_pipe);
+
+        let bottom_pipe = {
+          img: bottom_pipe_image,
+          x: pipe_x,
+          y: random_pipe_y + pipe_height + pipe_gap,
+          width: pipe_width,
+          height: pipe_height,
+
+          pipe_passed: false
+
+        }
+
+        pipe_array.push(bottom_pipe);
+      }
+
+      function move_bird(e) {
+        // Keyboard and mouse
+        if (e.code === "Space" || e.code === "ArrowUp"|| e.code === "KeyW" || e.button === 0){
+          // Increase velocity
+          bird.velocity = boost_on_click;
+
+          // Reset game if over
+          if (game_over) {
+            bird.y = bird_y;
+            pipe_array = [];
+            current_score = 0;
+            game_over = false;
+            bird.angle = 0;
+          }
+
+        }
+      }
+
+
+      function detect_collision(a, b) {
+        // Detects collision between two rectangles
+        return a.x < b.x + b.width &&
+                a.x + a.width > b.x &&
+                a.y < b.y + b.height &&
+                a.y + a.height > b.y;
+      }
+
       document.getElementById('solve')
            .addEventListener('click', () => captchaSuccess());
 
