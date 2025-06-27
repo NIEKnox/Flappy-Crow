@@ -1,5 +1,5 @@
 # Flappy Crow
-Made for the Kitboga Code Jam. I only learned javascript as part of this code jam and honestly this video did like 90% of the heavy lifting, I just tweaked some stuff and added a couple of my own things in (e.g. the bird rotating, or crowtating if you will :) )
+Made for the Kitboga Code Jam. I only learned javascript as part of this code jam and honestly this video (https://www.youtube.com/watch?v=jj5ADM2uywg) did like 90% of the heavy lifting, I just tweaked some stuff and added a couple of my own things in (e.g. the bird rotating, or crowtating if you will :) )
 
 There aren't really any hidden tricks in this. There is a bug that the bird does draw over the game over window but idk why that's drawing incorrectly tbh ¯\_(ツ)_/¯ we were all there when flappy bird happened you know the drill. 
 
